@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STRA Reporter</title>
+<style>
+:root{--bg:#f6f7f9;--cd:#fff;--tx:#1b1f24;--mu:#5b6573;--bd:#d9dde3;--ac:#1d4ed8}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1318;--cd:#171c23;--tx:#e6e9ee;--mu:#9aa5b4;--bd:#2b333d;--ac:#6b9bff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+.w{display:grid;grid-template-columns:230px 1fr;gap:16px;max-width:1280px;margin:0 auto;padding:16px}
+@media(max-width:800px){.w{grid-template-columns:1fr}}
+h1{margin:0;font-size:20px}h2{margin:0 0 4px}.mu{color:var(--mu)}
+nav{display:flex;flex-direction:column;gap:4px}
+nav button{display:flex;justify-content:space-between;text-align:left;background:var(--cd);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:7px 10px;cursor:pointer;font:inherit}
+nav button.on{border-color:var(--ac);color:var(--ac);font-weight:600}nav span{color:var(--mu);font-size:12px}
+#m{background:var(--cd);border:1px solid var(--bd);border-radius:10px;padding:16px;min-width:0}
+.q{border-top:1px solid var(--bd);padding:10px 0;display:grid;grid-template-columns:1fr 150px 1fr;gap:10px;align-items:start}
+@media(max-width:800px){.q{grid-template-columns:1fr}}
+.t{font-size:11px;color:var(--mu)}
+input,select,textarea{width:100%;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);font:inherit}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}label{display:block;font-size:12px;color:var(--mu)}
+button.p{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:8px 14px;cursor:pointer;font:inherit;margin:10px 6px 0 0}
+button.s{background:transparent;color:var(--ac);border:1px solid var(--ac);border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit;margin:10px 6px 0 0}
+.o{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:760px}th,td{border-bottom:1px solid var(--bd);padding:4px;text-align:left;vertical-align:top}th{font-size:12px;color:var(--mu)}
+td input[type=checkbox]{width:auto}.b{padding:1px 8px;border-radius:10px;font-size:12px;border:1px solid var(--bd);white-space:nowrap}
+img{max-width:100%;border:1px solid var(--bd);border-radius:6px;margin-top:8px}
+#rep{display:none}@page{size:landscape;margin:12mm}
+@media print{.np{display:none}#rep{display:block;color:#000;background:#fff}#rep table{min-width:0;font-size:10px}body{background:#fff}}
+</style></head><body>
+<div class="w np"><div><h1>STRA Reporter</h1><p class="mu">Answers drive the findings. Runs in your browser; nothing is uploaded.</p><nav id="nv"></nav>
+<button class="s" onclick="save()">Save session</button><button class="s" onclick="$('#ld').click()">Load</button><input type="file" id="ld" accept=".json" hidden></div>
+<div id="m"></div></div><div id="rep"></div>
+<script>
+const $=s=>document.querySelector(s);
+const SEC=[
+{t:"IAM",s:"Spoofing",q:[
+["Password policy enforced (length, complexity, lockout, history)","IA-5","A.5.17",4],
+["SSO used for all users","IA-2, IA-8","A.5.16",3],
+["MFA enforced for all users (mandatory for admins)","IA-2(1), IA-2(2)","A.8.5",5],
+["Integrated with Active Directory or enterprise IdP for identity lifecycle","AC-2, IA-4","A.5.16, A.5.18",3],
+["Session timeout and re-authentication configured","AC-11, AC-12","A.8.5",3],
+["Passwords stored with salted, slow hash (bcrypt, Argon2, PBKDF2)","IA-5(1)","A.8.24",5],
+["Service accounts and API keys held in a vault and rotated","IA-5, SC-12","A.5.17, A.8.24",4],
+["Joiner/mover/leaver process and periodic access reviews","AC-2(3)","A.5.18",3],
+["Login history and inactivity disablement monitored","AU-6, AC-2(3)","A.8.15, A.8.16",3]]},
+{t:"Encryption",s:"Information disclosure",q:[
+["Data in transit encrypted (TLS 1.2+ including internal traffic)","SC-8, SC-13","A.8.24, A.5.14",5],
+["Data at rest encrypted (databases, files, backups)","SC-28","A.8.24",5],
+["Keys managed in KMS/HSM, separate from data","SC-12","A.8.24",4],
+["Key rotation performed on a defined schedule","SC-12","A.8.24",3],
+["Key access restricted and logged; customer-managed keys where needed","SC-12, AU-2","A.8.24, A.8.15",3],
+["Certificates tracked and renewed; weak ciphers disabled","SC-13, SC-17","A.8.24",2]]},
+{t:"Data security",s:"Information disclosure",q:[
+["Data classified and labeled","RA-2, MP-3","A.5.12, A.5.13",3],
+["DLP or egress controls for sensitive data","AC-4, SC-7","A.8.12",3],
+["Production data masked or tokenized in non-production","SA-3, SI-12","A.8.11, A.8.33",4],
+["Database access restricted; privileged queries monitored","AC-3, AU-2","A.8.3, A.8.15",4],
+["No secrets or sensitive data in code, logs or tickets","SA-15, AU-3","A.8.4, A.8.28",4]]},
+{t:"Patch and vulnerability",s:"Elevation of privilege",q:[
+["OS and application patching to defined SLAs","SI-2","A.8.8",4],
+["Authenticated vulnerability scans run regularly","RA-5","A.8.8",4],
+["Vulnerabilities tracked to remediation with risk-based SLAs","RA-5, SI-2","A.8.8",3],
+["Dependencies scanned (SCA, SBOM)","SA-11, SR-4","A.8.28, A.5.21",3],
+["Penetration test before go-live and annually","CA-8","A.8.29",4],
+["No unsupported or end-of-life software","SA-22","A.8.8",4]]},
+{t:"Data governance",s:"Information disclosure",q:[
+["Retention periods defined and enforced","SI-12","A.5.33, A.8.10",3],
+["Secure destruction process (including backups and vendors)","MP-6","A.8.10, A.7.14",3],
+["Storage locations and regions documented and approved","PM-5, SA-9","A.5.23, A.5.34",4],
+["Data owner and custodian assigned","PM-5, CM-8","A.5.9, A.5.12",2],
+["Privacy impact assessment completed for personal data","PT-2, RA-8","A.5.34",4]]},
+{t:"Roles and responsibilities",s:"Elevation of privilege",q:[
+["Admin roles and responsibilities documented, least privilege","AC-5, AC-6","A.5.2, A.8.2",4],
+["Separation of duties (admin, developer, approver)","AC-5","A.5.3",4],
+["Privileged access via PAM or just-in-time with session recording","AC-6(1), AU-14","A.8.2",4],
+["User roles defined (RBAC) with documented responsibilities","AC-2, AC-3","A.5.2, A.5.15",3],
+["Security awareness training for users and admins","AT-2, AT-3","A.6.3",2]]},
+{t:"Third-party and remote access",s:"Elevation of privilege",q:[
+["All third parties with access to our systems or data are inventoried and approved","SA-9, CM-8","A.5.19, A.5.9",4],
+["Vendor remote access only via VPN/ZTNA with MFA, time-boxed and session-monitored","AC-17, IA-2(1)","A.8.20, A.5.16",5],
+["Vendor maintenance and support access approved per request and logged","MA-4, MA-5","A.5.18, A.8.15",4],
+["Vendor accounts follow onboarding/offboarding; orphaned accounts reviewed","AC-2, PS-7","A.5.18, A.5.20",4],
+["Staff remote access via VPN/ZTNA from managed devices only (BYOD controlled)","AC-17, AC-19","A.6.7, A.8.1",4],
+["Third-party API and service activity monitored for abuse or exfiltration","SI-4, SA-9","A.8.16, A.5.22",3],
+["NDA and data processing agreement signed with every third party handling data","PS-6, SA-9","A.6.6, A.5.20",4]]},
+{t:"Contracts, SLA and maintenance",s:"Denial of service",q:[
+["Is an SLA signed with the cloud provider and critical vendors?","SA-4, SA-9","A.5.20, A.5.22",4,"o",["Signed","In progress","Not signed","Unknown"],[1,2,3]],
+["Cloud service agreement defines shared responsibility and security obligations","SA-9","A.5.20, A.5.23",4],
+["SLA availability, RTO and RPO commitments match business needs","CP-2, SA-9","A.5.30, A.5.22",3],
+["Maintenance windows defined, communicated and tied to change approval and rollback","CM-3, MA-2","A.8.32, A.8.14",3],
+["Breach notification timelines and right to audit included in contracts","IR-6, SA-9","A.5.20, A.5.24",4],
+["Sub-processors and sub-contractors listed and reviewed","SA-9, SR-3","A.5.21, A.5.22",3],
+["Exit terms cover data return and deletion","SA-9, MP-6","A.5.20, A.8.10",3]]},
+{t:"Assurance documents (SOC 2, ISO)",s:"Repudiation",q:[
+["SOC 2 Type II report obtained from each critical vendor and reviewed within 12 months (exceptions noted)","CA-2, SA-9","A.5.22, A.5.35",4],
+["Complementary user entity controls (CUECs) from SOC 2 mapped to our own controls","CA-2, SA-9","A.5.22",3],
+["Bridge or gap letter covers the period after the report end date","CA-2","A.5.22",2],
+["ISO 27001 certificate and Statement of Applicability obtained; scope covers the service used","CA-2, SA-9","A.5.19, A.5.22",4],
+["Vendor penetration test summary and vulnerability management evidence received","CA-8, SA-11","A.8.29, A.5.22",3],
+["Security questionnaire (CAIQ, SIG or equivalent) completed by each critical vendor","SA-9, RA-3","A.5.19",3],
+["Data processing agreement and shared responsibility matrix on file","SA-9, PT-2","A.5.20, A.5.34",4],
+["Own policies and procedures documented, approved and current (access, logging, retention, IR)","PL-1, PM-1","A.5.1, A.5.37",4],
+["Audit evidence retained (scan reports, access reviews, restore tests, training records)","CA-2, AU-11","A.5.35, A.5.36",3]]},
+{t:"Logging and monitoring",s:"Repudiation",q:[
+["Security events logged (authentication, admin actions, data access)","AU-2, AU-12","A.8.15",5],
+["Logs forwarded continuously to SIEM (not manual review only)","AU-6, SI-4","A.8.15, A.8.16",4],
+["Alerting and monitoring with defined response (state hours covered)","SI-4, IR-4","A.8.16, A.5.24",4],
+["Log retention meets policy (state days)","AU-11","A.8.15",3],
+["Logs protected from tampering; destruction defined","AU-9, AU-11","A.8.15",3],
+["Time synchronized; logs reviewed on a schedule","AU-6, AU-8","A.8.15, A.8.17",2]]},
+{t:"Endpoint protection",s:"Tampering",q:[
+["EDR/antivirus on servers and endpoints, centrally managed","SI-3, SI-4","A.8.7",4],
+["MDM or endpoint management for company and BYOD devices","CM-2, AC-19","A.8.1",4],
+["DDoS protection in place","SC-5","A.8.6",3],
+["Email and web filtering, malware sandboxing","SI-3, SI-8","A.8.7, A.8.23",2]]},
+{t:"WAF rules",s:"Tampering",q:[
+["WAF in front of all internet-facing apps in blocking mode (not detect-only)","SC-7, SI-10","A.8.20, A.8.26",4],
+["Managed core rule set (e.g. OWASP CRS) enabled and kept up to date","SI-10, SI-2","A.8.26, A.8.8",4],
+["Rate limiting and throttling per IP and per endpoint (login, API)","SC-5, SC-7","A.8.6, A.8.20",4],
+["Geo-blocking rule for countries with no business need","SC-7, AC-4","A.8.20, A.8.22",3],
+["IP allow-listing for admin, management and partner API paths","AC-3, SC-7","A.8.20, A.8.3",4],
+["SQL injection protection rules","SI-10","A.8.28, A.8.26",4],
+["Cross-site scripting (XSS) protection rules","SI-10","A.8.28, A.8.26",4],
+["Path traversal, file inclusion and command/RCE injection rules","SI-10, SC-7","A.8.28",4],
+["Bad bot and automation protection (credential stuffing, scraping)","SC-5, SI-4","A.8.20, A.8.16",3],
+["IP reputation and threat-intelligence deny-lists","SI-4, RA-3","A.5.7, A.8.20",3],
+["Request validation: size limits, allowed methods, protocol and header anomalies","SI-10, SC-7","A.8.26",3],
+["Virtual patching for known CVEs until fixed","SI-2, SI-4","A.8.8",3],
+["WAF logs sent to SIEM; rules reviewed and tuned on a schedule","AU-6, SI-4","A.8.15, A.8.16",3]]},
+{t:"Network security",s:"Information disclosure",q:[
+["Segmentation in place (VPC/subnets, public, private and data tiers)","SC-7, AC-4","A.8.22",5],
+["Security groups and firewalls least privilege, deny by default","SC-7, AC-4","A.8.20",5],
+["Any ingress rule open to 0.0.0.0/0 (other than 80/443 on a load balancer)?","SC-7(5)","A.8.20",5,"r"],
+["Any egress rule open to 0.0.0.0/0 on all ports?","SC-7(5)","A.8.20",4,"r"],
+["Management ports (SSH, RDP, DB) not exposed to internet; bastion or VPN used","AC-17, SC-7","A.8.20, A.8.21",5],
+["Private endpoints or VPN for cloud services and third-party links","AC-17, SC-7","A.8.21",3],
+["Network flow logs and IDS/IPS enabled","AU-12, SI-4","A.8.16",3]]},
+{t:"AI usage",s:"Information disclosure",q:[
+["Is our data used to train or fine-tune AI models?","SA-9, PT-2","A.5.23, A.5.34",5,"r"],
+["Where does AI process our data?","SA-9, SC-7","A.5.14, A.5.23",4,"o",["Our environment","Vendor dedicated tenant","Vendor shared/public","Unknown"],[2,3]],
+["Contract prohibits training on our data and defines retention","SA-9, SR-3","A.5.20, A.5.23",4],
+["Sensitive data and PII redacted before being sent to AI","PT-2, SC-7","A.5.34, A.8.12",4],
+["AI prompts and outputs logged and reviewed","AU-2, AU-6","A.8.15",3],
+["Protection against prompt injection, data leakage and unsafe output","SI-10, SI-15","A.8.28",4],
+["Human review for AI-driven decisions; acceptable-use policy exists","PM-1, RA-3","A.5.1, A.5.10",3]]},
+{t:"AI vendor (e.g. Claude)",s:"Information disclosure",q:[
+["Tenancy of the AI service","SC-4, SA-9","A.5.23, A.8.22",4,"o",["Dedicated","Shared (multi-tenant)","Unknown"],[1,2]],
+["Vendor holds SOC 2 or ISO 27001; security review completed","CA-3, SA-9","A.5.19, A.5.22",4],
+["Vendor retention (or zero retention) and deletion confirmed","MP-6, SA-9","A.5.23, A.8.10",4],
+["API keys scoped per app, vaulted and rotated","AC-6, IA-5","A.5.17, A.8.2",4],
+["Region and data residency of AI processing approved","PM-5, SA-9","A.5.23, A.5.34",3],
+["Incident notification and exit terms agreed","IR-6, SA-9","A.5.20, A.5.24",3]]},
+{t:"AI audit documents",s:"Repudiation",q:[
+["AI acceptable use policy approved and communicated","PM-1, PL-4","A.5.1, A.5.10",4],
+["AI system inventory with owner, purpose and data used","CM-8, PM-5","A.5.9, ISO 42001 A.4",3],
+["AI risk and impact assessment completed (privacy, bias, safety)","RA-3, RA-8","A.5.34, ISO 42001 A.5",4],
+["AI data flow diagram showing what data reaches the model and where it is stored","AC-4, SA-9","A.5.14, ISO 42001 A.7",4],
+["AI vendor contract/DPA: no training on our data, retention, region, sub-processors","SA-9, SR-3","A.5.20, A.5.23",5],
+["AI vendor assurance reviewed: SOC 2 Type II, ISO 27001, ISO 42001 if available","CA-2, SA-9","A.5.22, ISO 42001 A.10",4],
+["Vendor model documentation (model card, system card, usage policy) on file","SA-4, SA-9","A.5.23, ISO 42001 A.6",3],
+["Prompt injection and misuse testing results documented","CA-8, SI-10","A.8.29, A.8.28",4],
+["Human oversight and escalation procedure documented","PM-1, IR-4","A.5.24, ISO 42001 A.9",3],
+["Regulatory mapping done (e.g. NIST AI RMF, EU AI Act, privacy law)","PM-9, SA-9","A.5.31, ISO 42001 A.2",3]]},
+{t:"Incident management",s:"Repudiation",q:[
+["Incident response plan documented, approved and current","IR-1, IR-8","A.5.24",4],
+["Playbooks for phishing, ransomware, secret/token leak and data breach","IR-4, IR-8","A.5.24, A.5.26",4],
+["Incident roles, escalation paths and RACI defined with 24x7 contacts","IR-7, IR-8","A.5.24, A.5.25",4],
+["Annual tabletop or simulation exercise performed","IR-3","A.5.24, A.5.27",3],
+["Breach notification process covers legal, regulatory, customer and vendor duties","IR-6, IR-7","A.5.26, A.5.34",4],
+["Evidence handling and forensic readiness (logs preserved, chain of custody)","IR-4, AU-9","A.5.28",3],
+["Post-incident reviews feed lessons learned into controls","IR-4","A.5.27",2],
+["Vendor incident contacts and reporting obligations are known","IR-6, SA-9","A.5.20, A.5.24",3]]},
+{t:"Resilience and other",s:"Denial of service",q:[
+["Backups encrypted, tested, offsite or immutable","CP-4, CP-9","A.8.13",4],
+["DR plan with tested RTO and RPO","CP-2, CP-10","A.5.30, A.8.14",3],
+["Secure SDLC: code review, SAST/DAST, change management","CM-3, SA-11","A.8.25, A.8.32",4],
+["Third parties assessed and monitored","SA-9, SR-6","A.5.19, A.5.22",3],
+["Hardening baselines (CIS) applied","CM-2, CM-6","A.8.9",3]]}];
+const STEPS=["Project","Architecture and data flow","Vendor documents",...SEC.map(s=>s.t),"Action plan and CAPA","Report"],LAST=STEPS.length-1;
+const CLS={Public:1,Internal:2,Confidential:4,Restricted:5};
+const OPT={c:["Not answered","Yes","Partial","No","Unknown","N/A"],r:["Not answered","No","Yes","Unknown"]};
+const PRI={"Very High":"Highest",High:"High",Medium:"Medium",Low:"Low","Very Low":"Lowest"};
+let DOCS=[],KEY="",MSG="",cur=0,S={proj:{name:"",owner:"",env:"Cloud",hosting:"",cls:"Confidential",purpose:"",limits:"",org:"",by:"",date:new Date().toISOString().slice(0,10),itype:"Task"},arch:{img:"",notes:""},ints:[],a:{},rv:{},sug:{},mode:"local",llm:{url:"http://localhost:11434/v1/chat/completions",model:"llama3.1",max:30000}};
+const band=s=>s>=20?"Very High":s>=12?"High":s>=6?"Medium":s>=3?"Low":"Very Low";
+const h=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+const sel=(o,v,at)=>`<select ${at}>${o.map(x=>`<option ${x==v?"selected":""}>${x}</option>`).join("")}</select>`;
+function lik(q,v){const t=q[4]||"c";if(!v||v=="Not answered"||v=="N/A")return 0;if(v=="Unknown")return 3;
+ if(t=="c")return v=="No"?4:v=="Partial"?2:0;if(t=="r")return v=="Yes"?4:0;return q[6].includes(q[5].indexOf(v))?4:0}
+const ACT={None:1,Planned:1,"In progress":.6,Implemented:.3};
+const CONS={Spoofing:"unauthorized access through impersonated or compromised identities","Information disclosure":"exposure or leakage of sensitive data",Tampering:"unauthorized modification of systems, code or data",Repudiation:"undetected incidents and an inability to investigate or prove accountability","Denial of service":"service outages, data loss or prolonged recovery","Elevation of privilege":"privilege abuse and lateral movement"};
+const lvl=n=>n<=2?"Low":n==3?"Medium":"High";
+function rs(f){const c=CONS[f.STR]||"security impact",e=f.T=="c"?`Control gap (${f.Ans=="Partial"?"partially implemented":f.Ans=="Unknown"?"status not confirmed":"not implemented"}): ${f.Gap}.`:f.T=="i"?f.Gap+".":`Risk condition present: ${f.Gap} (answer: ${f.Ans}).`;return`${e} This may lead to ${c} in the area of ${f.Sec}.`}
+function mt(f){const v=f.T=="c"?(f.Ans=="Partial"?"Complete and evidence":f.Ans=="Unknown"?"Verify and evidence":"Implement and document"):f.T=="i"?"Remediate":"Remove, remediate or formally justify";return`${v}: ${f.Gap.replace(/\?$/,"")}. Assign an owner and target date. Reference NIST ${f.N}; ISO ${f.O}.`}
+function gen(){const C=CLS[S.proj.cls]||2,F=[];
+ SEC.forEach((sc,si)=>sc.q.forEach((q,qi)=>{const k=si+"."+qi,a=S.a[k]||{},L=lik(q,a.v);if(!L)return;const I=Math.max(1,Math.min(5,Math.round((q[3]+C)/2)));
+  F.push({k,Sec:sc.t,STR:sc.s,Gap:q[0],Ans:a.v,Det:a.n||"",L,I,Sc:L*I,Rt:band(L*I),N:q[1],O:q[2],T:q[4]||"c"})}));
+ S.ints.forEach((r,i)=>{if(!r.Sys)return;const ext=r.Type!="Internal",b={Sec:"Integrations",STR:"Spoofing",Ans:"-",Det:r.Data,L:4,I:C,Sc:4*C,Rt:band(4*C),T:"i"};
+  if(ext&&["None","Basic","API key"].includes(r.Auth))F.push({...b,k:"i"+i+"a",Gap:`${r.Sys}: external integration uses ${r.Auth} authentication`,N:"IA-2, IA-5, IA-8",O:"A.5.16, A.8.5"});
+  if(["HTTP","FTP","Telnet"].includes(r.Proto))F.push({...b,k:"i"+i+"p",STR:"Information disclosure",Gap:`${r.Sys}: unencrypted protocol ${r.Proto}`,N:"SC-8, SC-13",O:"A.8.24, A.5.14"})});
+ F.sort((x,y)=>y.Sc-x.Sc);F.forEach((f,i)=>{f.ID="R-"+String(i+1).padStart(3,"0");const r=S.rv[f.k]||{};f.Ac=r.Ac!==false;f.Ow=r.Ow||"";f.Tr=r.Tr||"Modify";f.RS=r.RS??rs(f);f.MT=r.MT??mt(f);f.Act=r.Act||"None";f.AN=r.AN||"";f.Rs=Math.max(1,Math.round(f.Sc*ACT[f.Act]));f.RRt=band(f.Rs);f.Hz=r.Hz&&r.Hz!="Auto"?+r.Hz:HZ[f.RRt];f.Dt=r.Dt||addDays(f.Hz);f.Ev=r.Ev||"";f.RC=r.RC??rc(f);f.PA=r.PA??(PAT[f.STR]||"");f.VE=r.VE??"Re-test the control and retain evidence after implementation."});return F}
+const cnt=i=>{if(i<3||i>=LAST-1)return i==2&&DOCS.length?DOCS.length+" docs":"";const sc=SEC[i-3];return sc.q.filter((q,j)=>(S.a[(i-3)+"."+j]||{}).v&&S.a[(i-3)+"."+j].v!="Not answered").length+"/"+sc.q.length};
+function navr(){if(DOCS.length)S.dn=DOCS.map(d=>d.name+" ("+d.cat+")");$("#nv").innerHTML=STEPS.map((t,i)=>`<button class="${i==cur?"on":""}" onclick="go(${i})">${t}<span>${cnt(i)}</span></button>`).join("")}
+function go(i){cur=i;navr();draw();scrollTo(0,0)}
+const pn=(i)=>`<button class="s" ${i==0?"disabled":""} onclick="go(${i-1})">Back</button>${i<LAST?`<button class="p" onclick="go(${i+1})">Next</button>`:""}`;
+function draw(){let o="";const m=$("#m");
+ if(cur==0){const p=S.proj,f=(k,l,x)=>`<div><label>${l}</label>${x?sel(x,p[k],`data-p="${k}"`):`<input data-p="${k}" value="${h(p[k])}">`}</div>`;
+  o=`<h2>Project</h2><p class="mu">Highest data classification drives impact for every finding.</p><div class="g">${f("org","Assessed organization (client)")}${f("name","Project / system name")}${f("by","Prepared by")}<div><label>Assessment date (snapshot date)</label><input type=date data-p="date" value="${h(p.date)}"></div>${f("owner","Owner")}${f("env","Environment",["Cloud","On-prem","Hybrid"])}${f("hosting","Hosting provider and region")}${f("cls","Highest data classification",Object.keys(CLS))}${f("itype","Jira issue type")}</div><label style="margin-top:10px">Business purpose and scope</label><textarea rows=3 data-p="purpose">${h(S.proj.purpose)}</textarea><label style="margin-top:10px">Out of scope and limitations (e.g. no access to firewall configs, systems not reviewed)</label><textarea rows=3 data-p="limits">${h(S.proj.limits)}</textarea>`}
+ else if(cur==1){o=`<h2>Architecture and data flow</h2><label>Upload architecture diagram (PNG or JPG, kept in your session and added to the report)</label><input type=file accept="image/*" onchange="img(this)">${S.arch.img?`<img src="${S.arch.img}">`:""}<label style="margin-top:10px">Components, trust boundaries and data flows (describe what the diagram shows)</label><textarea rows=4 data-ar="1">${h(S.arch.notes)}</textarea>
+  <h2 style="margin-top:14px">Integrations</h2><div class="o"><table><tr><th>System</th><th>Type</th><th>Direction</th><th>Protocol</th><th>Authentication</th><th>Data exchanged</th><th></th></tr>${S.ints.map((r,i)=>{const d=k=>`data-i="${i}" data-k="${k}"`;return`<tr><td><input ${d("Sys")} value="${h(r.Sys)}"></td><td>${sel(["Internal","External","Third-party"],r.Type,d("Type"))}</td><td>${sel(["Inbound","Outbound","Bidirectional"],r.Dir,d("Dir"))}</td><td>${sel(["REST","SOAP","SFTP","SAML","HTTP","FTP","Telnet","Other"],r.Proto,d("Proto"))}</td><td>${sel(["None","Basic","API key","OAuth2","mTLS","SAML"],r.Auth,d("Auth"))}</td><td><input ${d("Data")} value="${h(r.Data)}"></td><td><button class="s" onclick="S.ints.splice(${i},1);draw()">x</button></td></tr>`}).join("")}</table></div><button class="s" onclick="S.ints.push({Sys:'',Type:'External',Dir:'Outbound',Proto:'REST',Auth:'None',Data:''});draw()">+ Add integration</button>`}
+ else if(cur==2){o=docsUI()}
+ else if(cur==LAST-1){o=planUI()}
+ else if(cur<LAST-1){const sc=SEC[cur-3];o=`<h2>${sc.t}</h2><p class="mu">Answer each item and add details (days, tools, owners) where useful. Unanswered items become open questions.</p>`+sc.q.map((q,j)=>{const k=(cur-3)+"."+j,a=S.a[k]||{},t=q[4]||"c",op=t=="o"?["Not answered",...q[5]]:OPT[t];
+  return`<div class="q"><div>${q[0]}<div class="t">NIST ${q[1]} | ISO ${q[2]}</div>${a.ai?'<span class="b">from document - verify</span>':""}</div>${sel(op,a.v||"Not answered",`data-a="${k}" data-f="v"`)}<input placeholder="Details / evidence (document name, date, owner)" data-a="${k}" data-f="n" value="${h(a.n)}"></div>`}).join("")}
+ else{const F=gen(),A=F.filter(f=>f.Ac),c={};A.forEach(f=>c[f.Rt]=(c[f.Rt]||0)+1);const open=SEC.reduce((n,s,i)=>n+s.q.filter((q,j)=>{const v=(S.a[i+"."+j]||{}).v;return!v||v=="Not answered"}).length,0);
+  o=`<h2>Report</h2><p>${F.length} findings, ${A.length} accepted. Open questions: ${open}. ${["Very High","High","Medium","Low","Very Low"].map(r=>c[r]?`<span class="b">${r} ${c[r]}</span> `:"").join("")}</p>
+  ${snap()}<button class="p" onclick="jira()">Export Jira CSV</button><button class="s" onclick="reg()">Export register CSV</button><button class="s" onclick="rpt()">Print / save report as PDF</button>
+  <p class="mu">Edit the risk statement and mitigation text as needed. Set Action taken to update the residual risk (None and Planned 100%, In progress 60%, Implemented 30% of the inherent score).</p><div class="o"><table style="min-width:1100px"><tr><th>Accept</th><th>ID</th><th>Inherent</th><th>Observation</th><th>Risk statement</th><th>Mitigation</th><th>Action taken</th><th>Residual</th><th>Treatment</th><th>Owner</th></tr>${F.map(f=>{const d=k=>`data-rv="${f.k}" data-f="${k}"`;return`<tr><td><input type=checkbox ${d("Ac")} ${f.Ac?"checked":""}></td><td>${f.ID}</td><td><span class="b">${f.Rt}</span><div class="t">L ${lvl(f.L)} x I ${lvl(f.I)}</div></td><td>${f.Sec}: ${h(f.Gap)}<div class="t">${f.Ans}${f.Det?": "+h(f.Det):""}<br>NIST ${f.N} | ISO ${f.O}</div></td><td><textarea rows=4 ${d("RS")}>${h(f.RS)}</textarea></td><td><textarea rows=4 ${d("MT")}>${h(f.MT)}</textarea></td><td>${sel(["None","Planned","In progress","Implemented"],f.Act,d("Act"))}<input placeholder="What was done" ${d("AN")} value="${h(f.AN)}"></td><td><span class="b">${f.RRt}</span></td><td>${sel(["Modify","Retain","Avoid","Share"],f.Tr,d("Tr"))}</td><td><input ${d("Ow")} value="${h(f.Ow)}"></td></tr>`}).join("")}</table></div>`}
+ m.innerHTML=o+`<div>${pn(cur)}</div>`}
+document.addEventListener("input",e=>{const d=e.target.dataset,v=e.target.type=="checkbox"?e.target.checked:e.target.value;
+ if(d.p)S.proj[d.p]=v;else if(d.ar)S.arch.notes=v;else if(d.a){(S.a[d.a]??={})[d.f]=v;if(d.f=="v")delete S.a[d.a].ai;navr()}else if(d.sg){S.sug[d.sg][d.f]=v}else if(d.dc){DOCS[d.dc].cat=v}else if(d.ll){S.llm[d.ll]=d.ll=="max"?+v:v}else if(d.key){KEY=v}else if(d.md){S.mode=v;draw()}else if(d.i)S.ints[d.i][d.k]=v;else if(d.rv){(S.rv[d.rv]??={})[d.f]=v;if(d.f=="Act"||d.f=="Hz")draw()}});
+function img(el){const f=el.files[0];if(!f)return;if(f.size>2e6)alert("Large image: session file will be big");const r=new FileReader();r.onload=()=>{S.arch.img=r.result;draw()};r.readAsDataURL(f)}
+const acc=()=>gen().filter(f=>f.Ac);
+function dl(n,t,y){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:y}));a.download=n;a.click()}
+function jira(){const r=[["Summary","Issue Type","Description","Priority","Labels","Labels","Labels","Labels","Labels","Assignee","Due Date"]];
+ acc().forEach(f=>r.push([`[${f.ID}] ${f.Gap}`,S.proj.itype,`Gap: ${f.Gap}\nAnswer: ${f.Ans} ${f.Det}\nArea: ${f.Sec} | STRIDE: ${f.STR}\nRisk statement: ${f.RS}\nMitigation: ${f.MT}\nLikelihood ${f.L} x Impact ${f.I} = ${f.Sc} (${f.Rt})\nAction taken: ${f.Act} ${f.AN}\nResidual: ${f.RRt} (${f.Rs})\nTreatment: ${f.Tr}\nNIST 800-53: ${f.N}\nISO 27001: ${f.O}`,PRI[f.RRt],"STRA",(S.proj.name||"project").replace(/ /g,"-"),f.STR.replace(/ /g,"-"),"NIST-"+f.N.split(",")[0],"ISO-"+f.O.split(",")[0],f.Ow,f.Dt]));
+ dl("stra_jira_import.csv",r.map(x=>x.map(esc).join(",")).join("\n"),"text/csv")}
+function reg(){const k=["ID","Sec","STR","Gap","Ans","Det","L","I","Sc","Rt","RS","MT","Act","AN","Rs","RRt","N","O","Tr","Ow","Hz","Dt","Ev","RC","PA","VE"];dl("stra_register.csv",[k.join(",")].concat(acc().map(f=>k.map(c=>esc(f[c])).join(","))).join("\n"),"text/csv")}
+function save(){dl("stra_session.json",JSON.stringify(S),"application/json")}
+$("#ld").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(t=>{try{S=JSON.parse(t);S.sug??={};S.mode??="local";S.llm??={url:"http://localhost:11434/v1/chat/completions",model:"llama3.1",max:30000};go(0)}catch{alert("Invalid file")}})};
+function rpt(){
+ const heat=a=>{let t='<table style="min-width:0;width:auto"><tr><th></th>'+[1,2,3,4,5].map(l=>`<th>L${l}</th>`).join("")+"</tr>";for(let i=5;i>0;i--){t+=`<tr><th>I${i}</th>`+[1,2,3,4,5].map(l=>{const n=a.filter(f=>f.L==l&&f.I==i).length,x=l*i;return`<td style="text-align:center;min-width:34px;background:${x>=20?"#f8b4b4":x>=12?"#fcd9a8":x>=6?"#fdf0a6":"#d7efc9"};color:#000">${n||""}</td>`}).join("")+"</tr>"}return t+"</table>"};
+ const rm=(t,fn)=>`<h3>${t}</h3><ul>${a.filter(fn).map(f=>`<li>${f.ID} ${h(f.Gap)} (${f.Sec})</li>`).join("")||"<li>None</li>"}</ul>`;const a=acc(),p=S.proj,c={};a.forEach(f=>c[f.Rt]=(c[f.Rt]||0)+1);const top=a[0]?a[0].Rt:"Very Low",mx=a.reduce((m,f)=>f.Rs>m?f.Rs:m,0),topR=mx?band(mx):"Very Low";
+ const open=[];SEC.forEach((s,i)=>s.q.forEach((q,j)=>{const v=(S.a[i+"."+j]||{}).v;if(!v||v=="Not answered")open.push(`${s.t}: ${q[0]}`)}));
+ $("#rep").innerHTML=`<h1>STRA Report: ${h(p.name)}</h1><p>${p.org?"Client: "+h(p.org)+" | ":""}Owner: ${h(p.owner)} | ${p.env} | ${h(p.hosting)} | Highest data class: ${p.cls} | Assessment date: ${h(p.date)}${p.by?" | Prepared by: "+h(p.by):""}</p>
+<h2>1. Executive summary</h2><p>Overall inherent risk: <b>${top}</b>; residual risk after actions taken: <b>${topR}</b>. ${a.length} accepted findings (inherent): ${Object.entries(c).map(([k,v])=>k+" "+v).join(", ")||"none"}. Residual: ${(()=>{const x={};a.forEach(f=>x[f.RRt]=(x[f.RRt]||0)+1);return Object.entries(x).map(([k,v])=>k+" "+v).join(", ")||"none"})()}.</p>
+${snap()}<h2>2. Scope and limitations</h2><p>${h(p.purpose)||"Not provided"}</p><p><b>Out of scope / limitations:</b> ${h(p.limits)||"Not provided"}</p>
+<h2>3. Architecture and data flow</h2>${S.arch.img?`<img src="${S.arch.img}">`:""}<p>${h(S.arch.notes)}</p>${S.ints.length?`<table><tr><th>System</th><th>Type</th><th>Direction</th><th>Protocol</th><th>Auth</th><th>Data</th></tr>${S.ints.map(r=>`<tr><td>${h(r.Sys)}</td><td>${r.Type}</td><td>${r.Dir}</td><td>${r.Proto}</td><td>${r.Auth}</td><td>${h(r.Data)}</td></tr>`).join("")}</table>`:""}
+${(S.dn||[]).length?`<h3>Documents reviewed</h3><ul>${S.dn.map(x=>`<li>${h(x)}</li>`).join("")}</ul>`:""}${Object.values(S.a).some(x=>x.ai)?"<p><i>Some answers were pre-filled from vendor documents by an AI model and must be verified by the analyst.</i></p>":""}<h2>4. Current observations and risks</h2><table><tr><th>#</th><th>Category</th><th>Observation</th><th>Risk statement</th><th>Impact</th><th>Likelihood</th><th>Risk level</th><th>Mitigation recommendation</th><th>Action taken</th><th>Residual risk</th><th>Treatment / owner</th><th>NIST 800-53 / ISO 27001</th></tr>${a.map((f,i)=>`<tr><td>${i+1}</td><td>${f.Sec}</td><td>${h(f.Gap)}${f.Ans=="-"?"":": "+f.Ans}${f.Det?" ("+h(f.Det)+")":""}</td><td>${h(f.RS)}</td><td>${lvl(f.I)}</td><td>${lvl(f.L)}</td><td>${f.Rt}</td><td>${h(f.MT)}</td><td>${f.Act}${f.AN?": "+h(f.AN):""}</td><td>${f.RRt}</td><td>${f.Tr}${f.Ow?" / "+h(f.Ow):""}</td><td>${f.N}<br>${f.O}</td></tr>`).join("")}</table>
+<h2>5. Heat map and STRIDE summary</h2>${heat(a)}<p>${(()=>{const st={};a.forEach(f=>st[f.STR]=(st[f.STR]||0)+1);return Object.entries(st).map(([k,v])=>k+": "+v).join(" | ")})()}</p><h2>6. Action plan and remediation timeline</h2><p>Timeframes are set from residual risk unless overridden by the analyst. Target dates are counted from the assessment date.</p>${[[30,"0-30 days"],[90,"31-90 days"],[180,"91-180 days (6 months)"],[365,"181-365 days (1 year)"]].map(([z,l])=>{const r=a.filter(f=>f.Hz==z);return`<h3>${l} (${r.length})</h3>`+(r.length?`<table><tr><th>ID</th><th>Remediation action</th><th>Residual</th><th>Owner</th><th>Target date</th><th>Status</th></tr>${r.map(f=>`<tr><td>${f.ID}</td><td>${f.Sec}: ${h(f.MT)}</td><td>${f.RRt}</td><td>${h(f.Ow)}</td><td>${f.Dt}</td><td>${f.Act=="None"?"Not started":f.Act}</td></tr>`).join("")}</table>`:"<p>None</p>")}).join("")}
+<h2>7. CAPA register (corrective and preventive actions)</h2><table><tr><th>CAPA ID</th><th>Risk ID</th><th>Finding</th><th>Root cause</th><th>Corrective action</th><th>Preventive action</th><th>Timeframe</th><th>Owner</th><th>Target date</th><th>Status</th><th>Verification of effectiveness</th><th>Evidence of closure</th></tr>${a.slice().sort((x,y)=>x.Hz-y.Hz||y.Rs-x.Rs).map(f=>`<tr><td>CAPA-${f.ID.slice(2)}</td><td>${f.ID}</td><td>${f.Sec}: ${h(f.Gap)}</td><td>${h(f.RC)}</td><td>${h(f.MT)}</td><td>${h(f.PA)}</td><td>${f.Hz} days</td><td>${h(f.Ow)}</td><td>${f.Dt}</td><td>${f.Act=="None"?"Not started":f.Act}</td><td>${h(f.VE)}</td><td>${h(f.Ev)}</td></tr>`).join("")}</table>
+<h2>8. Open questions for the project team</h2><ul>${open.map(x=>`<li>${h(x)}</li>`).join("")||"<li>None</li>"}</ul>
+<h2>9. Residual risk acceptance</h2><p>Risk owner: ________ Signature: ________ Date: ________</p><p><i>Draft generated from analyst answers using rule-based scoring; analyst review required.</i></p>`;print()}
+
+const CATS=["SOC 2 Type II report","ISO 27001 certificate/SoA","SLA or contract","Policy or procedure","Pen test report","AI vendor document","Architecture document","Other"];
+const PDFJS="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/",MAMMOTH="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";
+const qo=q=>q[4]=="o"?q[5]:OPT[q[4]||"c"].slice(1);
+const st=()=>{const e=$("#st");if(e)e.textContent=MSG};
+const ld=u=>new Promise((ok,no)=>{const e=document.createElement("script");e.src=u;e.onload=ok;e.onerror=()=>no(new Error("Could not load reader library (offline?). Paste the text instead."));document.head.appendChild(e)});
+async function rd(f){const n=f.name.toLowerCase();
+ if(n.endsWith(".pdf")){if(!window.pdfjsLib)await ld(PDFJS+"pdf.min.js");pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(await(await fetch(PDFJS+"pdf.worker.min.js")).blob());const d=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;let t="";for(let i=1;i<=d.numPages;i++)t+=(await(await d.getPage(i)).getTextContent()).items.map(x=>x.str).join(" ")+"\n";if(t.trim().length<200)throw new Error("Little or no text found (scanned PDF?). Paste the text instead.");return t}
+ if(n.endsWith(".docx")){if(!window.mammoth)await ld(MAMMOTH);return(await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()})).value}
+ return await f.text()}
+async function addDocs(fl){for(const f of fl){MSG="Reading "+f.name+"...";st();try{DOCS.push({name:f.name,cat:"Other",text:await rd(f)})}catch(e){alert(f.name+": "+e.message)}}MSG="";navr();draw()}
+function addPaste(){const t=$("#pt").value.trim();if(!t)return;DOCS.push({name:$("#pn").value||"Pasted text",cat:"Other",text:t});navr();draw()}
+function docsUI(){const l=S.llm,ks=Object.keys(S.sug).sort((x,y)=>{const[a,b]=x.split(".").map(Number),[c,d]=y.split(".").map(Number);return a-c||b-d});
+ return`<h2>Vendor documents</h2><p class="mu">Upload SOC 2 / ISO reports, SLAs, policies, pen test summaries or AI vendor documents (PDF, DOCX, TXT, MD, CSV). Files are read inside your browser. The questionnaire is pre-filled with suggestions, each with a quote as evidence, and you decide what to apply.</p>
+<input type=file multiple accept=".pdf,.docx,.txt,.md,.csv,.json,.html" onchange="addDocs(this.files)">
+<label style="margin-top:10px">Or paste text from a document</label><div class="g"><input id="pn" placeholder="Document name"></div><textarea id="pt" rows=3></textarea><button class="s" onclick="addPaste()">Add pasted text</button>
+${DOCS.length?`<div class="o"><table style="min-width:500px"><tr><th>Document</th><th>Type</th><th>Characters</th><th></th></tr>${DOCS.map((d,i)=>`<tr><td>${h(d.name)}</td><td>${sel(CATS,d.cat,`data-dc="${i}"`)}</td><td>${d.text.length}</td><td><button class="s" onclick="DOCS.splice(${i},1);navr();draw()">x</button></td></tr>`).join("")}</table></div>`:""}
+<h2 style="margin-top:14px">How to analyze</h2>
+<label><input type=radio name=md data-md="1" value="local" ${S.mode=="local"?"checked":""} style="width:auto"> Find evidence only (local keyword match, no AI, answers stay for you to set)</label>
+<label><input type=radio name=md data-md="1" value="ai" ${S.mode=="ai"?"checked":""} style="width:auto"> AI answers (sends document text to YOUR LLM endpoint below)</label>
+${S.mode=="ai"?`<div class="g" style="margin-top:8px"><div><label>Endpoint (OpenAI-compatible)</label><input data-ll="url" value="${h(l.url)}"></div><div><label>Model</label><input data-ll="model" value="${h(l.model)}"></div><div><label>API key (memory only, optional)</label><input type=password data-key="1" value="${h(KEY)}"></div><div><label>Max characters sent per request</label><input data-ll="max" type=number value="${l.max}"></div></div><p class="mu">Use only an approved or local endpoint (for example Ollama). Long documents are cut at the character limit, so paste or upload only the relevant parts. A local server may need cross-origin access enabled (for Ollama, set OLLAMA_ORIGINS).</p>`:""}
+<button class="p" onclick="analyze()">Analyze documents</button><span class="mu" id="st">${h(MSG)}</span>
+${ks.length?`<h2 style="margin-top:14px">Suggestions (${ks.length})</h2><label><input type=checkbox id="ow" style="width:auto"> Overwrite answers I already gave</label><button class="p" onclick="applySug()">Apply selected</button><div class="o"><table><tr><th>Apply</th><th>Question</th><th>Suggested</th><th>Evidence</th></tr>${ks.map(k=>{const[si,qi]=k.split(".").map(Number),q=SEC[si].q[qi],x=S.sug[k];return`<tr><td><input type=checkbox data-sg="${k}" data-f="ap" ${x.ap?"checked":""}></td><td>${SEC[si].t}: ${q[0]}</td><td>${x.m=="local"?"Review":sel(qo(q),x.v,`data-sg="${k}" data-f="v"`)}</td><td>${h(x.ev)}<div class="t">${h(x.doc)}${x.nf?" | quote NOT found verbatim in documents, check before applying":""}</div></td></tr>`}).join("")}</table></div>`:""}`}
+const STOP=new Set("the and for with that this are from have has not any all our their into per via can may use used using such each both within without until when where which will your you was were been being than then also only more most other these those over under between during before after about against".split(" "));
+const toks=t=>[...new Set((t.toLowerCase().match(/[a-z0-9]{3,}/g)||[]).filter(w=>!STOP.has(w)).map(w=>w.replace(/(ing|ed|es|s)$/,"")))];
+function local(){const ss=[];DOCS.forEach(d=>d.text.split(/[.!?]\s+|\n+/).forEach(x=>{x=x.trim();if(x.length>25&&x.length<500)ss.push({d:d.name,x,t:new Set(toks(x))})}));
+ SEC.forEach((sc,si)=>sc.q.forEach((q,qi)=>{const qt=toks(q[0]);let b=null,bs=0;ss.forEach(z=>{let m=0;qt.forEach(w=>{if(z.t.has(w))m++});const r=m/Math.max(qt.length,1);if(m>=2&&r>bs){bs=r;b=z}});if(b&&bs>=.3)S.sug[si+"."+qi]={v:"Review",ev:b.x.slice(0,300),doc:b.d,ap:true,m:"local"}}))}
+async function ask(msgs){const c=S.llm,r=await fetch(c.url,{method:"POST",headers:{"Content-Type":"application/json",...(KEY?{Authorization:"Bearer "+KEY}:{})},body:JSON.stringify({model:c.model,messages:msgs,temperature:0})});if(!r.ok)throw new Error(r.status+" "+(await r.text()).slice(0,200));return(await r.json()).choices[0].message.content}
+const norm=x=>String(x).toLowerCase().replace(/\s+/g," ").trim();
+async function aiSec(si){const sc=SEC[si];let ctx="";DOCS.forEach(d=>{ctx+=`\n=== DOCUMENT: ${d.name} (type: ${d.cat}) ===\n${d.text}\n`});ctx=ctx.slice(0,S.llm.max||30000);
+ const qs=sc.q.map((q,qi)=>`${si}.${qi} | ${q[0]} | allowed: ${qo(q).join(" / ")}`).join("\n");
+ const sys="You are a careful security assessor. Answer ONLY from the documents provided. Answer Yes only if the documents explicitly state the control exists, Partial if it is partly stated, No if the documents state it is absent. If the documents do not mention it, answer Not answered. For questions asking whether a risky condition exists, Yes means the condition exists. Never guess. Return ONLY a JSON array of objects {id, answer, evidence, doc}. evidence is a short verbatim quote from the documents (max 25 words); doc is the document name.";
+ const t=await ask([{role:"system",content:sys},{role:"user",content:`${ctx}\n\nQUESTIONS (id | question | allowed answers):\n${qs}`}]);
+ const m=t.match(/\[[\s\S]*\]/);if(!m)return;let arr;try{arr=JSON.parse(m[0])}catch{return}
+ const all=norm(DOCS.map(d=>d.text).join(" "));
+ arr.forEach(r=>{const k=String(r.id),[a,b]=k.split(".");const q=a==String(si)?sc.q[+b]:null;if(!q||!r.evidence)return;const v=qo(q).find(x=>x.toLowerCase()==String(r.answer).toLowerCase());if(!v)return;const ok=all.includes(norm(r.evidence).replace(/[.\u2026]+$/,""));S.sug[k]={v,ev:String(r.evidence).slice(0,300),doc:String(r.doc||""),ap:ok,nf:!ok,m:"ai"}})}
+async function analyze(){if(!DOCS.length)return alert("Add a document first");S.sug={};
+ if(S.mode=="local"){local();MSG=Object.keys(S.sug).length+" evidence passages found. Review them and apply; in this mode answers are not set automatically.";draw();return}
+ try{for(let i=0;i<SEC.length;i++){MSG=`Asking model: ${SEC[i].t} (${i+1}/${SEC.length})...`;st();await aiSec(i)}MSG=Object.keys(S.sug).length+" suggestions. Review them, then apply."}catch(e){MSG="Error: "+e.message}draw()}
+function applySug(){const ow=$("#ow")&&$("#ow").checked;let n=0;Object.entries(S.sug).forEach(([k,x])=>{if(!x.ap)return;const a=S.a[k]||{},has=a.v&&a.v!="Not answered",note=`[${x.doc}] ${x.ev}`;
+ if(x.m=="local"){S.a[k]={...a,n:(a.n?a.n+" | ":"")+"Doc evidence: "+note};n++}else if(!has||ow){S.a[k]={v:x.v,n:note,ai:true};n++}});MSG=n+" items applied to the questionnaire.";navr();draw()}
+
+const HZ={"Very High":30,High:90,Medium:180,Low:365,"Very Low":365};
+function addDays(n){const d=new Date(S.proj.date||Date.now());if(isNaN(d))return"";d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
+function snap(){const rows=SEC.map((sc,si)=>{let g=0,p=0,b=0,u=0;sc.q.forEach((q,qi)=>{const v=(S.a[si+"."+qi]||{}).v;if(!v||v=="Not answered"||v=="N/A")return;const L=lik(q,v);if(L==0)g++;else if(L==2)p++;else if(L==3)u++;else b++});const n=g+p+b+u;return{t:sc.t,tot:sc.q.length,n,g,p,b,u,pct:n?Math.round(100*(g+p/2)/n):null}});
+ const A=rows.reduce((x,r)=>x+r.n,0),T=rows.reduce((x,r)=>x+r.tot,0),G=rows.reduce((x,r)=>x+r.g+r.p/2,0);
+ return`<h3>Security posture snapshot (${h(S.proj.date)})</h3><p>Questions answered: ${A} of ${T}. Overall control coverage: <b>${A?Math.round(100*G/A):0}%</b> (in place counts 100%, partial 50%).</p><div class="o"><table style="min-width:520px"><tr><th>Domain</th><th>Answered</th><th>In place</th><th>Partial</th><th>Gap</th><th>Unknown</th><th>Coverage</th></tr>${rows.map(r=>`<tr><td>${r.t}</td><td>${r.n}/${r.tot}</td><td>${r.g}</td><td>${r.p}</td><td>${r.b}</td><td>${r.u}</td><td>${r.pct==null?"-":`<span style="background:#d9dde3;width:110px;height:10px;display:inline-block;border-radius:5px;vertical-align:middle"><span style="background:${r.pct>=75?"#2e9d5b":r.pct>=40?"#e0a800":"#d64545"};width:${r.pct}%;height:10px;display:block;border-radius:5px"></span></span> ${r.pct}%`}</td></tr>`).join("")}</table></div>`}
+const PAT={Spoofing:"Add periodic access reviews and monitoring of authentication anomalies, and include the control in the joiner/mover/leaver process.",Tampering:"Add automated checks (pipeline gates, configuration baselines, WAF rule reviews) to detect drift and unauthorized change.",Repudiation:"Review log and evidence coverage on a schedule and assign an owner for audit evidence retention.","Information disclosure":"Add data classification, encryption and retention checks to onboarding, change management and periodic reviews.","Denial of service":"Test capacity, recovery and vendor SLA commitments on a schedule and after each significant change.","Elevation of privilege":"Review privileged access quarterly and enforce least privilege through change approval."};
+const rc=f=>f.T=="c"?(f.Ans=="Partial"?"Control incomplete or inconsistently applied.":f.Ans=="Unknown"?"Control status not verified and no evidence available.":"Control not implemented or not documented."):f.T=="i"?"Integration set up without the required authentication or encryption.":"Risky configuration or practice is in place.";
+function planUI(){const F=gen().filter(f=>f.Ac).sort((x,y)=>x.Hz-y.Hz||y.Rs-x.Rs);
+ return`<h2>Action plan and CAPA</h2><p class="mu">CAPA = corrective action (fix the gap now) plus preventive action (stop it coming back). Timeframes are suggested from residual risk: Very High 30 days, High 90, Medium 180, Low 365; override any of them. Dates count from the assessment date. Status shares the Action taken field, so residual risk updates here too. All text is editable.</p><p>${[30,90,180,365].map(z=>`<span class="b">${z} days: ${F.filter(f=>f.Hz==z&&f.Act!="Implemented").length}</span> `).join("")}<span class="b">Done: ${F.filter(f=>f.Act=="Implemented").length}</span></p><button class="s" onclick="capcsv()">Export CAPA CSV</button>
+ <div class="o"><table style="min-width:1750px"><tr><th>CAPA</th><th>Residual</th><th>Root cause</th><th>Corrective action</th><th>Preventive action</th><th>Timeframe (days)</th><th>Target date</th><th>Owner</th><th>Status</th><th>Verification of effectiveness</th><th>Evidence of closure</th></tr>${F.map(f=>{const d=k=>`data-rv="${f.k}" data-f="${k}"`,ta=k=>`<textarea rows=4 ${d(k)}>${h(f[k])}</textarea>`;return`<tr><td>CAPA-${f.ID.slice(2)}<div class="t">${f.ID}: ${f.Sec}</div></td><td><span class="b">${f.RRt}</span></td><td>${ta("RC")}</td><td>${ta("MT")}</td><td>${ta("PA")}</td><td>${sel(["Auto","30","90","180","365"],(S.rv[f.k]||{}).Hz||"Auto",d("Hz"))}<div class="t">Now: ${f.Hz}</div></td><td><input type=date ${d("Dt")} value="${f.Dt}"></td><td><input ${d("Ow")} value="${h(f.Ow)}"></td><td>${sel(["None","Planned","In progress","Implemented"],f.Act,d("Act"))}</td><td><textarea rows=3 ${d("VE")}>${h(f.VE)}</textarea></td><td><input placeholder="Ticket, screenshot, report" ${d("Ev")} value="${h(f.Ev)}"></td></tr>`}).join("")}</table></div>`+(F.length?"":"<p>No accepted findings yet. Answer the questionnaire first.</p>")}
+function capcsv(){const k=["CID","ID","Sec","Gap","RC","MT","PA","Hz","Dt","Ow","Act","VE","Ev","Rt","RRt","N","O"],hd=["CAPA ID","Risk ID","Area","Finding","Root cause","Corrective action","Preventive action","Timeframe (days)","Target date","Owner","Status","Verification of effectiveness","Evidence of closure","Inherent","Residual","NIST 800-53","ISO 27001"];
+ dl("stra_capa.csv",[hd.join(",")].concat(gen().filter(f=>f.Ac).sort((x,y)=>x.Hz-y.Hz||y.Rs-x.Rs).map(f=>({...f,CID:"CAPA-"+f.ID.slice(2)})).map(f=>k.map(c=>esc(f[c])).join(","))).join("\n"),"text/csv")}
+navr();draw();
+</script></body></html>
